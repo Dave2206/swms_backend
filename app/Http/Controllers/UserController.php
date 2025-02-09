@@ -5,10 +5,17 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use App\Models\User;
+use App\Models\UserRole;
 
 class UserController extends Controller
 {
+
+    public function roles() {
+        return response()->json(UserRole::all());
+    }
+
     public function login(Request $request)
     {
         // Validate request
@@ -64,4 +71,105 @@ class UserController extends Controller
             'email' => $user->email,    // You can return more user info here if needed
         ]);
     }
+
+    // Fetch drivers for users with role = 4
+    public function fetchDrivers(Request $request)
+    {
+        // Fetch users with role_id = 4 (assuming role 4 is for drivers)
+        $drivers = User::where('user_role_id', 4)->get();
+
+        // Check if there are drivers available
+        if ($drivers->isEmpty()) {
+            return response()->json([
+                'message' => 'No drivers found.',
+            ], 404);
+        }
+
+        // Log the fetched drivers for debugging
+        Log::info('Fetched Drivers:', ['drivers' => $drivers]);
+
+        // Return the list of drivers
+        return response()->json([
+            'drivers' => $drivers,
+        ]);
+    }
+    public function getUsers()
+    {
+        // Get the currently authenticated user
+        $authUser = Auth::user();
+
+        // Get all users excluding the authenticated user
+        $users = User::join('user_roles', 'users.user_role_id', '=', 'user_roles.id')
+    ->where('users.id', '!=', $authUser->id)
+    ->get(['users.id', 'users.name', 'users.email', 'user_roles.user_role as role']);
+
+
+        // Return the list of users with their role
+        return response()->json($users);
+    }
+
+     // Create a new user
+     public function createUser(Request $request)
+     {
+         // Validate the input data
+         $request->validate([
+             'name' => 'required|string|max:255',
+             'email' => 'required|email|unique:users,email',
+             'role' => 'required|integer',
+         ]);
+         
+         $password = $this->generatePassword($request->name, $request->role);
+         // Create a new user
+         $user = User::create([
+             'name' => $request->name,
+             'email' => $request->email,
+             'password' => $password,
+             'user_role_id' => $request->role,
+         ]);
+ 
+         // Return the newly created user
+         return response()->json($user, 201);
+     }
+     public function generatePassword($name, $role) {
+        // Get the first word from the name
+        $firstWord = Str::of($name)->explode(' ')->first();
+    
+        // Generate the password
+        return $firstWord . '@000' . $role;
+    }
+ 
+     // Update an existing user
+     public function updateUser(Request $request, $id)
+     {
+         // Validate the input data
+         $request->validate([
+             'name' => 'required|string|max:255',
+             'role' => 'required|integer',
+         ]);
+ 
+         // Find the user by ID
+         $user = User::findOrFail($id);
+ 
+         // Update user details
+         $user->update([
+             'name' => $request->name,
+             'user_role_id' => $request->role,
+         ]);
+ 
+         // Return the updated user
+         return response()->json($user, 200);
+     }
+ 
+     // Delete an existing user
+     public function deleteUser($id)
+     {
+         // Find the user by ID
+         $user = User::findOrFail($id);
+ 
+         // Delete the user
+         $user->delete();
+ 
+         // Return a success message
+         return response()->json(['message' => 'User deleted successfully'], 200);
+     }
 }

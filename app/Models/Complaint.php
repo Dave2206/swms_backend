@@ -20,5 +20,9 @@ class Complaint extends Model
         'file_path',
         'created_at',
         'updated_at',
+        'is_verified',
+        'is_assigned',
+        'assigned_to',
+        'assigned_date',
     ]; 
 }
