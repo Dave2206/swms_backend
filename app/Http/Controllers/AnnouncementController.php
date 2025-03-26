@@ -14,7 +14,9 @@ class AnnouncementController extends Controller
      */
     public function index()
     {
-        $announcements = Announcement::latest()->get();
+        $announcements = Announcement::where('effective_date', '>=', now())
+            ->latest()
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -22,42 +24,49 @@ class AnnouncementController extends Controller
         ]);
     }
 
+
     /**
      * Create a new announcement.
      */
     public function store(Request $request)
-    {
-        // Validate incoming request
-        $request->validate([
-            'subject' => 'required|string|max:255',
-            'dateTime' => 'required|date',
-            'route' => 'required|string',
-            'context' => 'required|string',
-            'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // Optional image validation
-        ]);
+{
+    // Validate request
+    $request->validate([
+        'subject' => 'required|string|max:255',
+        'dateTime' => 'required|date',
+        'route' => 'required|string',
+        'context' => 'required|string',
+        'attachment' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
 
-        // Handle image upload if exists
-        if ($request->hasFile('photo')) {
-            $imagePath = $request->file('photo')->store('public/storage/announcement'); // Store image in 'public/announcement'
-            // Get the filename from the storage path
-            $imageFilename = basename($imagePath);
-        } else {
-            $imageFilename = null; // No image uploaded
-        }
-
-        $user = auth()->user()->name;
-
-        // Create the announcement
-        $announcement = Announcement::create([
-            'subject' => $request->subject,
-            'effective_date' => $request->dateTime, // Assuming dateTime is the effective date
-            'image_path' => $imageFilename, // Store only the filename
-            'body' => $request->context, // Assuming context is the body of the announcement
-            'route' => $request->route,
-            'author' => $user,
-        ]);
-
-        // Return response
-        return response()->json(['message' => 'Announcement created successfully!', 'data' => $announcement], 201);
+    // Handle image upload
+    if ($request->hasFile('attachment')) {
+        $image = $request->file('attachment');
+        $imageName = time() . '_' . $image->getClientOriginalName(); // Unique filename
+        $image->move(public_path('announcement'), $imageName); // Move file to `public/announcement/`
+    } else {
+        $imageName = null;
     }
+
+    $user = auth()->user()->name;
+
+    // Save announcement in database
+    $announcement = Announcement::create([
+        'subject' => $request->subject,
+        'effective_date' => $request->dateTime,
+        'image_path' => $imageName, // Save only filename
+        'body' => $request->context,
+        'route' => $request->route,
+        'author' => $user,
+    ]);
+
+    // Return response with full public URL
+    return response()->json([
+        'message' => 'Announcement created successfully!',
+        'data' => $announcement,
+        'image_url' => $imageName ? asset("announcement/$imageName") : null // Correct public URL
+    ], 201);
+}
+
+
 }

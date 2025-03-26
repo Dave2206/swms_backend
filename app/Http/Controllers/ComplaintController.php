@@ -16,13 +16,17 @@ class ComplaintController extends Controller
             'email' => 'required|email',
             'address' => 'nullable|string|max:255',
             'description' => 'required|string',
-            'file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'attachment' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         // Handle file upload
         $filePath = null;
-        if ($request->hasFile('file')) {
-            $filePath = $request->file('file')->store('complaints', 'public');
+        if ($request->hasFile('attachment')) {
+            $image = $request->file('attachment');
+            $imageName = time() . '_' . $image->getClientOriginalName(); // Unique filename
+            $image->move(public_path('attachments'), $imageName); // Move file to `public/announcement/`
+        } else {
+            $imageName = null;
         }
 
         // Store complaint in the database
@@ -31,7 +35,7 @@ class ComplaintController extends Controller
             'email' => $validatedData['email'],
             'address' => $validatedData['address'] ?? '',
             'description' => $validatedData['description'],
-            'file_path' => $filePath,
+            'file_path' => $imageName,
         ]);
 
         return response()->json(['message' => 'Complaint submitted successfully!', 'complaint' => $complaint], 201);
@@ -44,6 +48,7 @@ class ComplaintController extends Controller
     {
         $complaints = Complaint::whereNull('is_verified')
             ->OrWhere('is_verified','=','0')
+            ->latest()
             ->get();
         
         return response()->json([
@@ -57,8 +62,11 @@ class ComplaintController extends Controller
      */
     public function assignmentIndex()
     {
-        $complaints = Complaint::where('is_verified', 1)->whereNull('is_assigned')->get();
-        
+        $complaints = Complaint::where('is_verified', 1)
+                ->whereNull('is_assigned')
+                ->latest()
+                ->get();
+                    
         return response()->json([
             'success' => true,
             'data' => $complaints
@@ -70,7 +78,7 @@ class ComplaintController extends Controller
      */
     public function index()
     {
-        $complains = Complaint::all();
+        $complains = Complaint::latest()->get();
         return response()->json([
             'success' => true,
             'data' => $complains
@@ -127,8 +135,21 @@ class ComplaintController extends Controller
     {
         $userId = auth()->user()->id; // Get the authenticated user's ID
         
-        $assignedRoutes = Complaint::where('assigned_to', $userId)->get();
+        $assignedRoutes = Complaint::where('assigned_to', $userId)
+                                    ->whereNull('is_resolved')
+                                    ->get();
 
         return response()->json($assignedRoutes);
+    }
+    public function resolve(Request $request)
+    {
+        $request->validate([
+            'routeId' => 'required|exists:complaints,id',
+        ]);
+
+        $complaint = Complaint::findOrFail($request->routeId);
+        $complaint->update(['is_resolved' => true]); // Mark as resolved
+
+        return response()->json(['message' => 'Complaint resolved successfully']);
     }
 }

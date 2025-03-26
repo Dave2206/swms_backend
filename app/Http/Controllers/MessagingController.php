@@ -18,24 +18,32 @@ class MessagingController extends Controller
             'recipient' => 'required|string',
             'subject' => 'required|string',
             'message' => 'required|string',
-            'attachment' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'attachment' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,pdf,doc,docx|max:2048', // Allowing common file types
         ]);
 
         $message = new Message();
         $message->sender_id = auth()->user()->id;
-        $message->recipient = $request->recipient;
+        $message->recipient_id = $request->recipient;
         $message->subject = $request->subject;
         $message->message = $request->message;
-        
+
+        // Handle file upload
         if ($request->hasFile('attachment')) {
-            $path = $request->file('attachment')->store('attachments', 'public');
-            $message->attachment = $path;
+            $file = $request->file('attachment');
+            $fileName = time() . '_' . $file->getClientOriginalName(); // Unique filename
+            $file->move(public_path('attachments'), $fileName); // Move to public/attachments
+            $message->attachment = $fileName; // Store only the filename
         }
 
         $message->save();
 
-        return response()->json(['message' => 'Message sent successfully.'], 201);
+        return response()->json([
+            'message' => 'Message sent successfully.',
+            'data' => $message,
+            'attachment_url' => $message->attachment ? asset("attachments/{$message->attachment}") : null
+        ], 201);
     }
+
 
     /**
      * Get inbox messages.

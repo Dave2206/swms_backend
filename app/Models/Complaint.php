@@ -24,5 +24,6 @@ class Complaint extends Model
         'is_assigned',
         'assigned_to',
         'assigned_date',
+        'is_resolved',
     ]; 
 }

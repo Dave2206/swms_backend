@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Models\User;
 use App\Models\UserRole;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Hash;
+
+
 
 class UserController extends Controller
 {
@@ -57,6 +61,7 @@ class UserController extends Controller
             'message' => 'Login successful',
             'access_token' => $token,
             'token_type' => 'Bearer',
+            'role'=>$role->user_role,
         ]);
     }
     // Method to get user profile data
@@ -97,7 +102,7 @@ class UserController extends Controller
     {
         // Get the currently authenticated user
         $authUser = Auth::user();
-
+        
         // Get all users excluding the authenticated user
         $users = User::join('user_roles', 'users.user_role_id', '=', 'user_roles.id')
     ->where('users.id', '!=', $authUser->id)
@@ -118,7 +123,7 @@ class UserController extends Controller
              'role' => 'required|integer',
          ]);
          
-         $password = $this->generatePassword($request->name, $request->role);
+         $password = 'password@1234';
          // Create a new user
          $user = User::create([
              'name' => $request->name,
@@ -130,13 +135,7 @@ class UserController extends Controller
          // Return the newly created user
          return response()->json($user, 201);
      }
-     public function generatePassword($name, $role) {
-        // Get the first word from the name
-        $firstWord = Str::of($name)->explode(' ')->first();
-    
-        // Generate the password
-        return $firstWord . '@000' . $role;
-    }
+
  
      // Update an existing user
      public function updateUser(Request $request, $id)
@@ -160,6 +159,39 @@ class UserController extends Controller
          return response()->json($user, 200);
      }
  
+     public function updateProfile(Request $request)
+    {
+        $user = auth()->user();
+
+        $request->validate([
+            'name' => ['required', 'string', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'password' => [
+                'nullable',
+                'min:6',
+                'regex:/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/',
+                'confirmed'
+            ]
+        ], [
+            'password.regex' => 'Password must contain at least one uppercase letter, one symbol, and one number.',
+            'password.min' => 'Password must be at least 6 characters long.',
+        ]);
+        
+
+        $user->name = $request->name;
+        $user->email = $request->email;
+        
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
+        }
+
+        $user->save();
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'user' => $user
+        ]);
+    }
      // Delete an existing user
      public function deleteUser($id)
      {
